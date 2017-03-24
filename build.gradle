@@ -1,0 +1,60 @@
+apply plugin: 'java'
+apply plugin: 'eclipse'
+apply plugin: 'com.google.protobuf'
+
+buildscript {
+	repositories {
+		mavenCentral()
+	}
+	dependencies {
+		classpath 'com.google.protobuf:protobuf-gradle-plugin:0.8.0'
+	}
+}
+
+repositories {
+  mavenCentral()
+  mavenLocal()
+}
+
+def grpcVersion = "1.1.2"
+
+dependencies {
+	// gRPC
+	compile "io.grpc:grpc-netty:${grpcVersion}"
+	compile "io.grpc:grpc-protobuf:${grpcVersion}"
+	compile "io.grpc:grpc-stub:${grpcVersion}"
+	
+	// jGit
+	compile "org.eclipse.jgit:org.eclipse.jgit:4.6.1.201703071140-r"
+}
+
+protobuf {
+  generatedFilesBaseDir = "$projectDir/src/gen" 
+  protoc {
+    artifact = "com.google.protobuf:protoc:3.0.2"
+  }
+  plugins {
+    grpc {
+      artifact = "io.grpc:protoc-gen-grpc-java:${grpcVersion}"
+    }
+  }
+  
+  generateProtoTasks {
+  	all()*.plugins {
+  		grpc {}
+    }
+  }
+}
+
+clean {
+    delete protobuf.generatedFilesBaseDir
+}
+
+eclipse {
+    classpath {
+        file.whenMerged { cp ->
+            cp.entries.add( new org.gradle.plugins.ide.eclipse.model.SourceFolder("${protobuf.generatedFilesBaseDir}/main/java", null) )
+            cp.entries.add( new org.gradle.plugins.ide.eclipse.model.SourceFolder("${protobuf.generatedFilesBaseDir}/main/grpc", null) )
+        }
+    }
+}

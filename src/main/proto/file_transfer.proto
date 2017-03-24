@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+option java_package = "com.github.crob1140.filetransfer";
+option java_multiple_files = true;
+
+service FileTransfer {
+	rpc Upload(stream UploadRequest) returns (stream UploadAcknowledgement) {}
+}
+
+message UploadRequest {
+    message FileMetadata {
+         string name = 1;
+         int64 size = 2;
+    }
+    message FileChunk {
+          bytes data = 1;
+          int64 position = 2;
+    }
+    // Single instance of FileMetadata to begin a new file, followed by one or more instance of FileChunk to transfer the data
+    oneof value {
+        FileMetadata metadata = 1;
+        FileChunk chunk = 2;
+    }
+}
+
+message UploadAcknowledgement {
+	string name = 1;
+}
