@@ -1,5 +1,6 @@
 package com.github.crob1140.codewiz.battles;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 
 import java.io.File;
@@ -28,10 +29,12 @@ import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 import javax.xml.bind.DatatypeConverter;
 
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.ResetCommand.ResetType;
-import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.api.errors.InvalidRemoteException;
+import org.eclipse.jgit.api.errors.JGitInternalException;
+import org.eclipse.jgit.api.errors.RefNotFoundException;
+import org.eclipse.jgit.api.errors.TransportException;
 
+import com.github.crob1140.codewiz.FileUtils;
 import com.github.crob1140.codewiz.Wizard;
 import com.github.crob1140.codewiz.actions.Action;
 import com.github.crob1140.codewiz.battles.BattleDetails.JavaSpecifics;
@@ -44,10 +47,13 @@ public class BattleEvaluatorImpl extends BattleEvaluatorImplBase {
 	
 	private static final String NAMESPACE_ID = "95cf00c82f9a4d40a00f9d88ced4e3f8";
 	
-	private File filesRootDirectory;
 	
-	public BattleEvaluatorImpl(File filesRootDirectory) {
+	private File filesRootDirectory;
+	private RepositoryDownloader repoDownloader;
+	
+	public BattleEvaluatorImpl(File filesRootDirectory, RepositoryDownloader repoDownloader) {
 		this.filesRootDirectory = filesRootDirectory;
+		this.repoDownloader = repoDownloader;
 	}
 	
 	@Override
@@ -55,52 +61,66 @@ public class BattleEvaluatorImpl extends BattleEvaluatorImplBase {
 		switch (request.getTransferCase())
 		{
 			case REPO_DETAILS:
-				try {
-					// Join the repo details to create some unique identifier
-					RepoDetails repoDetails = request.getRepoDetails();
-					String repoIdentifier = String.join("/", repoDetails.getDomain(), 
-							repoDetails.getUsername(), 
-							repoDetails.getRepository(), 
-							repoDetails.getBranch(),
-							repoDetails.getCommitHash());
-					
-					UUID repoUUID = getV3UUID(NAMESPACE_ID, repoIdentifier);
-					
-					// Only pull the code if we haven't already got this commit
-					File repoStoredDir = filesRootDirectory.toPath().resolve(repoUUID.toString()).toFile();
-					if (!repoStoredDir.exists()) {
-						
-						// Clone the branch from the git repo
-						String repoUrl = String.format("https://%s/%s/%s.git", repoDetails.getDomain(), repoDetails.getUsername(), repoDetails.getRepository());
-						Git git = Git.cloneRepository()
-							.setURI(repoUrl)
-							.setDirectory(repoStoredDir)
-							.setBranchesToClone(Arrays.asList("refs/heads/" + repoDetails.getBranch()))
-							.setBranch("refs/heads/" + repoDetails.getBranch())
-							.call();
-						
-						// Hard reset to the specific commit
-						git.reset()
-							.setMode(ResetType.HARD)
-							.setRef(repoDetails.getCommitHash())
-							.call();
+				// Join the repo details to create some unique identifier
+				RepoDetails repoDetails = request.getRepoDetails();
+				UUID repoUUID = createIdentifier(repoDetails);
+				
+				// Only pull the code if we haven't already got this commit
+				File repoStoredDir = filesRootDirectory.toPath().resolve(repoUUID.toString()).toFile();
+				if (!repoStoredDir.exists()) {
+					try
+					{
+						this.repoDownloader.cloneToDirectory(repoDetails, repoStoredDir);							
 					}
-					
-					// Return the unique identifier to the client
-					responseObserver.onNext(CodeTransferResponse.newBuilder()
-							.setId(repoUUID.toString())
-							.build());
-					
-				} catch (GitAPIException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
+					catch (Throwable t) {
+						
+						// Delete the directory that was made to store the cloned repository
+						try {
+							FileUtils.empty(repoStoredDir);
+							repoStoredDir.delete();
+						}
+						catch (IOException e) {
+							e.printStackTrace();
+						}
+						
+						// Choose the appropriate return status based on the exception type
+						Status returnStatus = Status.UNKNOWN;
+						if (t instanceof InvalidRemoteException // repo doesn't exist
+							|| t instanceof TransportException // branch doesn't exist
+							|| t instanceof RefNotFoundException // commit doesn't exist	
+							|| t instanceof JGitInternalException) { // commit in wrong format		
+							returnStatus = Status.INVALID_ARGUMENT;
+						}
+						
+						// Log the error
+						t.printStackTrace(System.err);
+						responseObserver.onError(returnStatus.asException());
+						return;
+					}
 				}
-                
+				
+				// Return the unique identifier to the client
+				responseObserver.onNext(CodeTransferResponse.newBuilder()
+						.setId(repoUUID.toString())
+						.build());
+                break;
 			case UPLOAD_REQUEST:
 				break;
 			case TRANSFER_NOT_SET:
 				break;
 		}
+		
+		responseObserver.onCompleted();
+	}
+
+	public static UUID createIdentifier(RepoDetails repoDetails) {
+		String repoIdentifier = String.join("/", repoDetails.getDomain(), 
+				repoDetails.getUsername(), 
+				repoDetails.getRepository(), 
+				repoDetails.getBranch(),
+				repoDetails.getCommitHash());
+		
+		return getV3UUID(NAMESPACE_ID, repoIdentifier);
 	}
 	
 	@Override
