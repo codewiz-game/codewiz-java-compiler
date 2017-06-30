@@ -7,22 +7,14 @@ import java.util.Arrays;
 
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.ResetCommand.ResetType;
-import org.eclipse.jgit.api.errors.CanceledException;
-import org.eclipse.jgit.api.errors.DetachedHeadException;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.eclipse.jgit.api.errors.InvalidConfigurationException;
 import org.eclipse.jgit.api.errors.InvalidRemoteException;
-import org.eclipse.jgit.api.errors.NoHeadException;
-import org.eclipse.jgit.api.errors.RefNotAdvertisedException;
-import org.eclipse.jgit.api.errors.RefNotFoundException;
-import org.eclipse.jgit.api.errors.WrongRepositoryStateException;
+
+import com.github.crob1140.codewiz.grpc.CommitDetails;
 
 public class RepositoryDownloader {
 	
-	public void cloneToDirectory(RepoDetails details, File directory) throws GitAPIException, InvalidRemoteException, IOException, URISyntaxException {
-		// Clone the branch from the git repo
-		String repoUrl = String.format("git://%s/%s/%s.git", details.getDomain(), details.getUsername(), details.getRepository());
-		
+	public void cloneToDirectory(CommitDetails details, File directory) throws GitAPIException, InvalidRemoteException, IOException, URISyntaxException {
 		/**
 		Git git = Git.init()
 				.setDirectory(directory)
@@ -46,6 +38,8 @@ public class RepositoryDownloader {
 		
 		Git git = null;
 		try {
+			// Clone the branch from the git repo
+			String repoUrl = getRepositoryUrl(details);
 			git = Git.cloneRepository()
 				.setURI(repoUrl)
 				.setDirectory(directory)
@@ -65,14 +59,8 @@ public class RepositoryDownloader {
 			}
 		}
 	}
-
-	public void pullUpdates(File projectDirectory)
-			throws WrongRepositoryStateException,
-			InvalidConfigurationException, DetachedHeadException,
-			InvalidRemoteException, CanceledException, RefNotFoundException,
-			RefNotAdvertisedException, NoHeadException,
-			org.eclipse.jgit.api.errors.TransportException, GitAPIException,
-			IOException {
-		Git.open(projectDirectory).pull().call();
+	
+	public String getRepositoryUrl(CommitDetails details) {
+		return String.format("git://%s/%s/%s.git", details.getDomain(), details.getUsername(), details.getRepository());
 	}
 }

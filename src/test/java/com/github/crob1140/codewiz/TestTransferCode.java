@@ -30,7 +30,7 @@ import org.testng.annotations.Test;
 
 import com.github.crob1140.codewiz.battles.BattleEvaluatorGrpc;
 import com.github.crob1140.codewiz.battles.BattleEvaluatorGrpc.BattleEvaluatorBlockingStub;
-import com.github.crob1140.codewiz.battles.BattleEvaluatorImpl;
+import com.github.crob1140.codewiz.battles.JavaCompilerImpl;
 import com.github.crob1140.codewiz.battles.CodeTransferRequest;
 import com.github.crob1140.codewiz.battles.RepoDetails;
 import com.github.crob1140.codewiz.battles.RepositoryDownloader;
@@ -97,7 +97,7 @@ public class TestTransferCode {
 		
 		testServer = InProcessServerBuilder.forName(TEST_SERVER_NAME)
 				.directExecutor()
-				.addService(new BattleEvaluatorImpl(repoStorageDir, new RepositoryDownloader()))
+				.addService(new JavaCompilerImpl(repoStorageDir, new RepositoryDownloader()))
 				.build()
 				.start();
 		
@@ -150,7 +150,7 @@ public class TestTransferCode {
 
 		// Need to assert in some way that transfer code calls the repo downloader with this file
 		// TODO: should have another way of mapping repo details to expected File that doesn't require this hacked on method
-		UUID repoUUID = BattleEvaluatorImpl.createIdentifier(repoDetails);
+		UUID repoUUID = JavaCompilerImpl.createIdentifier(repoDetails);
 		File repoClonePath = Paths.get(repoStorageDir.getAbsolutePath(), repoUUID.toString()).toFile();
 
 		Status status = null;
@@ -192,7 +192,7 @@ public class TestTransferCode {
 				.setRepoDetails(repoDetails)
 				.build());
 		
-		UUID repoUUID = BattleEvaluatorImpl.createIdentifier(repoDetails);
+		UUID repoUUID = JavaCompilerImpl.createIdentifier(repoDetails);
 		File repoClonePath = Paths.get(repoStorageDir.getAbsolutePath(), repoUUID.toString()).toFile();
 		
 		Assert.assertTrue(repoClonePath.exists(), "Clone directory should exist if the fetch succeeded.");
